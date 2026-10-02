@@ -1,1 +1,73 @@
 
+name: Build PAWN SHIFT Korean Font Plugin
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 6
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "6.0.x"
+
+      - name: Download Unity 6000.3.10 reference library
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p unity-libs pawn-shift-font-build-upload/lib
+          curl -fL "https://unity.bepinex.dev/libraries/6000.3.10.zip" -o unity-libs.zip
+          unzip -q unity-libs.zip -d unity-libs
+          CORE="$(find unity-libs -type f -name 'UnityEngine.CoreModule.dll' | head -n 1)"
+          test -n "$CORE"
+          cp "$CORE" pawn-shift-font-build-upload/lib/UnityEngine.CoreModule.dll
+          ls -lh pawn-shift-font-build-upload/lib/UnityEngine.CoreModule.dll
+
+      - name: Restore
+        run: >
+          dotnet restore
+          pawn-shift-font-build-upload/src/PAWNShift.KoreanFontFallback.csproj
+          --configfile pawn-shift-font-build-upload/NuGet.config
+
+      - name: Build
+        run: >
+          dotnet build
+          pawn-shift-font-build-upload/src/PAWNShift.KoreanFontFallback.csproj
+          -c Release
+          --no-restore
+
+      - name: Prepare ready-to-install ZIP
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p package/BepInEx/plugins/PAWNShift.KoreanFontFallback
+          cp pawn-shift-font-build-upload/src/bin/Release/PAWNShift.KoreanFontFallback.dll \
+             package/BepInEx/plugins/PAWNShift.KoreanFontFallback/
+          cp pawn-shift-font-build-upload/config-template.cfg \
+             package/BepInEx/plugins/PAWNShift.KoreanFontFallback/
+          cp pawn-shift-font-build-upload/INSTALL_README.txt package/
+          cd package
+          zip -r ../PAWN_SHIFT_KoreanFontFallback.zip .
+
+      - name: Upload DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: PAWNShift-KoreanFontFallback-DLL
+          path: pawn-shift-font-build-upload/src/bin/Release/PAWNShift.KoreanFontFallback.dll
+          if-no-files-found: error
+
+      - name: Upload ready-to-install ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: PAWN_SHIFT_KoreanFontFallback
+          path: PAWN_SHIFT_KoreanFontFallback.zip
+          if-no-files-found: error
